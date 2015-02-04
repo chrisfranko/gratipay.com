@@ -635,33 +635,26 @@ class Participant(Model, MixinTeam):
             c.run("DELETE FROM emails WHERE participant=%s AND address=%s",
                   (self.username, address))
 
-    def _render_email(self, spt_name, accept_lang=None, **context):
+    def send_email(self, spt_name, accept_lang=None, **context):
         context['escape'] = escape
         context['username'] = self.username
         context.setdefault('include_unsubscribe', True)
-        context.setdefault('email', self.email_address)
+        email = context.setdefault('email', self.email_address)
         langs = i18n.parse_accept_lang(accept_lang or self.email_lang or 'en')
         locale = i18n.match_lang(langs)
         i18n.add_helpers_to_context(self._tell_sentry, context, locale)
         spt = self._emails[spt_name]
         base_spt = self._emails['base']
-        subject = spt['subject'].render(context)
         def render(t):
             b = base_spt[t].render(context).strip()
             return b.replace('$body', spt[t].render(context).strip())
-        result = {
-            'from_email': 'support@gratipay.com',
-            'from_name': 'Gratipay Support',
-            'subject': subject,
-            'html': render('text/html'),
-            'text': render('text/plain')
-        }
-        return result
-
-    def send_email(self, spt_name, accept_lang=None, **context):
-        email_address = context.get('email', self.email_address)
-        message = self._render_email(spt_name, accept_lang, **context)
-        message['to'] = [{'email': email_address, 'name': self.username}]
+        message = {}
+        message['from_email'] = 'support@gratipay.com'
+        message['from_name'] = 'Gratipay Support'
+        message['to'] = [{'email': email, 'name': self.username}]
+        message['subject'] = spt['subject'].render(context)
+        message['html'] = render('text/html')
+        message['text'] = render('text/plain')
 
         return self._mailer.messages.send(message=message)
 
